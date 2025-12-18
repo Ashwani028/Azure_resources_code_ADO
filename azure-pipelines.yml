@@ -1,0 +1,133 @@
+trigger: none
+
+pool: pool11
+
+ 
+parameters:
+  - name: environment
+    type: string
+    default: dev
+    values:
+      - dev
+      - prod
+      - uat
+
+variables:
+  - name: workDir
+    value: $(System.DefaultWorkingDirectory)/env/${{ parameters.environment }}
+
+  - name: ServiceConnection
+    value: 'sc-sen-spn'
+
+stages:
+
+  - stage: Plan_Build_stage
+    displayName: Plan&&Build_stage
+    jobs:
+      - job: Plan_Build_job
+        displayName: Plan_Build_job
+        steps:
+          - task: TerraformInstaller@1
+            inputs:
+              terraformVersion: 'latest'
+
+          - template: template/build.yml
+    
+          - task: TerraformTask@5
+            displayName: Validate
+            inputs:
+              provider: 'azurerm'
+              command: 'validate'
+              workingDirectory: '$(workDir)'
+
+          - task: TerraformTask@5
+            displayName: Plan
+            inputs:
+              provider: 'azurerm'
+              command: 'plan'
+              workingDirectory: '$(workDir)'
+              environmentServiceNameAzureRM: $(ServiceConnection)
+
+  - stage: PretestScanning
+    displayName: Pretest_Scanning
+    jobs:
+      - job: PretestScanningjob
+        displayName: Pre-test_Scanning_job
+        continueOnError: true
+        steps:
+          - task: PowerShell@2
+            displayName: tflint_scanning
+            inputs:
+              targetType: 'inline'
+              script: |
+                winget install --id TerraformLinters.tflint -e
+                tflint
+                ls
+              workingDirectory: '$(workDir)'
+    
+      - job: checkovScanningjob
+        displayName: checkov_job
+        dependsOn: PretestScanningjob
+        continueOnError: true
+        steps:
+          - task: PowerShell@2
+            displayName: checkov scanning 
+            continueOnError: true
+            inputs:
+              targetType: 'inline'
+              script: 'checkov -d . --framework terraform'
+              workingDirectory: '$(workDir)'
+    
+      - job: tfsecScanningjob
+        displayName: tfsec_Scanning_job
+        dependsOn: checkovScanningjob
+        continueOnError: true
+        steps:           
+          - task: tfsec@1
+            inputs:
+              version: 'v1.26.0'
+              dir: '$(workDir)'
+
+
+  - stage: Cost_GovernancePolicies
+    displayName: Cost_GovernancePolicies
+    jobs:
+      - job: Cost_GovernancePolicies_job
+        displayName: Cost_GovernancePolicies_job
+        steps:
+          - task: PowerShell@2
+            inputs:
+              targetType: 'inline'
+              script: 'infracost breakdown --path=.'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/module'
+              
+  - stage: ManualValidation
+    displayName: ManualValidation
+    jobs:
+     - job: ManualValidation_job
+       displayName: ManualValidation_job
+       pool: server
+       steps:
+         - task: ManualValidation@1
+           inputs:
+             notifyUsers: 'ajaiswal028@gmail.com'
+             approvers: 'ajaiswal028@gmail.com'
+             instructions: 'Pls check and approve'
+
+  - stage: Apply_code
+    displayName: Apply_code_stage
+    jobs:
+      - job: Apply_code_job
+        displayName: Apply_code_job
+        steps:
+          - template: template/build.yml
+
+          - task: TerraformTask@5
+            displayName: Apply_plan
+            inputs:
+              provider: 'azurerm'
+              command: 'apply'
+              workingDirectory: '$(workDir)'
+              environmentServiceNameAzureRM: $(ServiceConnection)
+                
+       

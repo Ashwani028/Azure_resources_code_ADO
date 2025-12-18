@@ -1,0 +1,12 @@
+       steps:   
+          - task: TerraformTask@5
+            displayName: Init
+            inputs:
+              provider: 'azurerm'
+              command: 'init'
+              workingDirectory: '$(workDir)'
+              backendServiceArm: $(ServiceConnection)
+              backendAzureRmStorageAccountName: 'infrastorage4480143'
+              backendAzureRmContainerName: 'infracontainer'
+              backendAzureRmKey: '${{ parameters.environment }}-ash-terraform.tfstate'
+    

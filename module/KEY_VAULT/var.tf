@@ -1,0 +1,3 @@
+variable "keyvault_details" {
+  
+}
