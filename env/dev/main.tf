@@ -1,10 +1,5 @@
 module "rg_modules" {
-<<<<<<< HEAD:env/dev/mian.tf
-  source     = "../../../module/RG"
-  
-=======
   source     = "../../module/RG"
->>>>>>> 43390cdcea34c2d69bfc54afe5e77b05eee903b6:env/dev/main.tf
   rg_details = var.rg_name
 }
 
